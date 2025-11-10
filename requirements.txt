@@ -19,3 +19,4 @@ einops
 torch
 timm
 hf_transfer
+runpod
