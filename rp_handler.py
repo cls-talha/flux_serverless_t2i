@@ -10,8 +10,8 @@ import runpod
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 PIPELINE = None
-HF_TOKEN = os.environ.get("HF_TOKEN")
-LORA_REPO = "strangerzonehf/Flux-Super-Realism-Flux-LoRA"
+HF_TOKEN = os.environ.get("HF_TOKEN")  # Hugging Face token from environment
+LORA_REPO = "strangerzonehf/Flux-Super-Realism-LoRA"
 BASE_MODEL = "black-forest-labs/FLUX.1-dev"
 
 def load_pipeline():
