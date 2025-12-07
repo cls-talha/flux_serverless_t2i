@@ -1,14 +1,16 @@
 FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
 
-    
-RUN pip install --upgrade pip setuptools wheel
-RUN pip install torch torchvision
-RUN pip install libcom
+RUN apt-get update && apt-get install -y git
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir setuptools wheel torch torchvision
+
+RUN pip install --no-cache-dir libcom
 
 WORKDIR /workspace
 
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
