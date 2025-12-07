@@ -20,7 +20,3 @@ torch
 timm
 hf_transfer
 runpod
-rembg
-onnxruntime
-asyncer
-filetype
