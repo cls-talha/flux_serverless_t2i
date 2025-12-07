@@ -8,8 +8,6 @@ COPY requirements.txt .
 # Install all dependencies
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
-
-# Copy your code (handler.py, any helper scripts)
+RUN pip install libcom rembg onnxruntime asyncer filetype
 COPY . .
-
 CMD ["python", "-u", "rp_handler.py"]
