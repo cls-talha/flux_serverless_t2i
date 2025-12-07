@@ -1,4 +1,3 @@
-libcom
 git+https://github.com/huggingface/accelerate.git
 git+https://github.com/huggingface/diffusers.git
 git+https://github.com/huggingface/peft.git
