@@ -4,7 +4,8 @@ import base64
 import random
 import torch
 from PIL import Image
-from diffusers import DiffusionPipeline, FluxImg2ImgPipeline
+from diffusers import DiffusionPipeline, FluxKontextPipeline
+
 from huggingface_hub import login
 import runpod
 
@@ -22,6 +23,7 @@ BASE_MODEL = "black-forest-labs/FLUX.1-dev"
 # Pipeline Loaders t2i
 # ------------------------
 def load_t2i_pipeline():
+    free_i2i()
     global PIPELINE_T2I
     if PIPELINE_T2I is None:
         if HF_TOKEN is None:
@@ -48,13 +50,21 @@ def disable_lora(pipe):
 # Pipeline Loaders i2i
 # ------------------------
 def load_i2i_pipeline():
+    free_t2i()
     global PIPELINE_I2I
     if PIPELINE_I2I is None:
+        if HF_TOKEN is None:
+            raise ValueError("HF_TOKEN environment variable is not set")
+
+        login(token=HF_TOKEN)
+
         dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-        PIPELINE_I2I = FluxImg2ImgPipeline.from_pretrained(
-            BASE_MODEL,
-            torch_dtype=dtype
+        PIPELINE_I2I = FluxKontextPipeline.from_pretrained(
+            "black-forest-labs/FLUX.1-Kontext-dev",
+            torch_dtype=dtype,
+            use_auth_token=True
         ).to(DEVICE)
+
     return PIPELINE_I2I
 
 
@@ -69,6 +79,24 @@ def pil_to_base64(img: Image.Image) -> str:
 
 def base64_to_pil(b64: str) -> Image.Image:
     return Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+
+# ------------------------
+# CUDA memory cleanup
+# ------------------------
+def free_t2i():
+    global PIPELINE_T2I
+    if PIPELINE_T2I is not None:
+        del PIPELINE_T2I
+        PIPELINE_T2I = None
+        torch.cuda.empty_cache()
+
+
+def free_i2i():
+    global PIPELINE_I2I
+    if PIPELINE_I2I is not None:
+        del PIPELINE_I2I
+        PIPELINE_I2I = None
+        torch.cuda.empty_cache()
 
 
 # ------------------------
@@ -90,17 +118,20 @@ def handler(job):
         generator = torch.Generator(device=DEVICE).manual_seed(seed)
 
         # -------------------------
-        # TEXT → IMAGE (WITH LORA)
+        # TEXT → IMAGE
         # -------------------------
         if case in ["generate", "generate_foreground"]:
             pipe = load_t2i_pipeline()
-            enable_lora(pipe)
-
+        
+            # Only enable LoRA if you want it
+            if case == "generate_foreground":   # or some other condition
+                enable_lora(pipe)
+        
             if case == "generate_foreground":
                 prompt_full = f"Super Realism {prompt}, pure white background"
             else:
                 prompt_full = f"Super Realism {prompt}"
-
+        
             img = pipe(
                 prompt=prompt_full,
                 width=width,
@@ -110,24 +141,42 @@ def handler(job):
                 generator=generator,
                 output_type="pil"
             ).images[0]
+            img.save("img.png")
+
         # -------------------------
         # IMAGE → IMAGE
         # -------------------------
         elif case == "image_to_image":
             pipe = load_i2i_pipeline()
+        
             image_b64 = inputs.get("image")
             if image_b64 is None:
                 return {"status": "failed", "error": "image (base64) required for i2i"}
         
             init_image = base64_to_pil(image_b64)
+        
+            orig_w, orig_h = init_image.size
+            gen_w = (orig_w // 16) * 16
+            gen_h = (orig_h // 16) * 16
+        
+            negative_prompt = (
+                "deformed face, distorted facial features, bad anatomy, "
+                "asymmetrical face, extra facial features, duplicate face, "
+                "disfigured nose, warped eyes, cross-eyed, "
+                "unnatural skin texture, melted face, blurry face, low detail, "
+                "oversharpened, plastic skin, uncanny"
+            )
+        
             img = pipe(
-                prompt=prompt,
                 image=init_image,
-                strength=strength,
-                num_inference_steps=steps,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
                 guidance_scale=cfg,
-                output_type="pil"
+                num_inference_steps=steps,
+                width=gen_w,
+                height=gen_h
             ).images[0]
+            img.save("img2img.png")
 
         else:
             return {"status": "failed", "error": f"Unknown case: {case}"}
